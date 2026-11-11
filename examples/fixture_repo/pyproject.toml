@@ -1,0 +1,9 @@
+[project]
+name = "fixture-calculator"
+version = "0.0.1"
+requires-python = ">=3.11"
+description = "Intentionally broken calculator used by Agentic SWE demos"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
