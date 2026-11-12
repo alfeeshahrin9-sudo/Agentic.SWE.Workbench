@@ -23,7 +23,22 @@ def index_python_repo(repo_path: Path) -> DependencyGraph:
     """Build a lightweight symbol + import dependency graph from Python sources."""
     root = repo_path.resolve()
     graph = DependencyGraph()
+    _index_python_into(root, graph)
+    return graph
 
+
+def index_repo(repo_path: Path) -> DependencyGraph:
+    """Index Python and TypeScript/JavaScript sources into one dependency graph."""
+    from .typescript import index_typescript_sources
+
+    root = repo_path.resolve()
+    graph = DependencyGraph()
+    _index_python_into(root, graph)
+    index_typescript_sources(root, graph)
+    return graph
+
+
+def _index_python_into(root: Path, graph: DependencyGraph) -> None:
     for path in root.rglob("*.py"):
         if any(part in SKIP_DIRS for part in path.parts):
             continue
@@ -69,7 +84,6 @@ def index_python_repo(repo_path: Path) -> DependencyGraph:
                     )
                 )
 
-    return graph
 
 
 def _record_import(

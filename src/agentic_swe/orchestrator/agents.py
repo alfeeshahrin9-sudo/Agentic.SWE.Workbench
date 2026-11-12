@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from agentic_swe.code_intel import index_python_repo
+from agentic_swe.code_intel import detect_test_command, index_repo
 from agentic_swe.config import Settings
 from agentic_swe.healing import diagnose_failure, refine_repair_brief
 from agentic_swe.llm import llm_available, structured_generate
@@ -33,14 +33,30 @@ def manager_ingest(state: RunState) -> RunState:
 
 
 def planner_plan(state: RunState, sandbox: LocalSandbox, settings: Settings) -> RunState:
-    graph = index_python_repo(sandbox.work_dir)
+    graph = index_repo(sandbox.work_dir)
     state.graph_summary = graph.summary()
+    test_command = detect_test_command(sandbox.work_dir)
 
     keywords = _keywords(f"{state.ticket.title} {state.ticket.description}")
-    candidates = graph.find_files_for_keywords(keywords) or [
-        p for p in sandbox.list_files("**/*.py") if not p.startswith("tests/")
+    source_files = [
+        p
+        for p in sandbox.list_files("**/*")
+        if p.endswith((".py", ".ts", ".tsx", ".js", ".jsx"))
+        and "/test" not in f"/{p}"
+        and not p.startswith("tests/")
+        and not p.endswith(".test.ts")
+        and not p.endswith(".test.js")
+        and not p.endswith(".test.tsx")
+        and not p.endswith(".spec.ts")
+        and not p.endswith(".spec.js")
     ]
-    prod = [p for p in candidates if not p.startswith("tests/")]
+    candidates = graph.find_files_for_keywords(keywords) or source_files
+    prod = [
+        p
+        for p in candidates
+        if not p.startswith("tests/")
+        and not p.endswith((".test.ts", ".test.js", ".test.tsx", ".spec.ts", ".spec.js"))
+    ]
     target = prod[0] if prod else (candidates[0] if candidates else "src/calculator.py")
 
     plan = _llm_plan(state, settings, target, candidates) or EditPlan(
@@ -49,7 +65,7 @@ def planner_plan(state: RunState, sandbox: LocalSandbox, settings: Settings) -> 
             PlanStep(
                 description=f"Inspect and fix logic in {target}",
                 target_files=[target],
-                rationale="Selected via AST keyword / path heuristics",
+                rationale="Selected via multi-language keyword / path heuristics",
             ),
             PlanStep(
                 description="Run unit tests and heal if needed",
@@ -58,7 +74,7 @@ def planner_plan(state: RunState, sandbox: LocalSandbox, settings: Settings) -> 
             ),
         ],
         risks=["Heuristic planner may miss multi-file interactions"],
-        test_command="pytest -q",
+        test_command=test_command,
         approved=False,
     )
 
@@ -245,7 +261,7 @@ def _llm_plan(
         return None
     plan.approved = False
     if not plan.test_command:
-        plan.test_command = "pytest -q"
+        plan.test_command = detect_test_command(Path(state.work_dir or state.repo_path))
     state.note("Planner used LLM structured plan")
     return plan
 
@@ -370,7 +386,7 @@ def _heuristic_patches(
     sandbox: LocalSandbox,
     repair_brief: str | None = None,
 ) -> list[FilePatch]:
-    """Offline programmer: apply known fixture fix or leave a no-op scaffold."""
+    """Offline programmer: apply known fixture fixes or leave a no-op scaffold."""
     brief = (repair_brief or "").lower()
     target = "src/calculator.py"
     if state.plan and state.plan.steps and state.plan.steps[0].target_files:
@@ -379,27 +395,44 @@ def _heuristic_patches(
     try:
         current = sandbox.read_file(target)
     except Exception:
-        content = (
-            '"""Calculator utilities."""\n\n'
-            "def add(a: int, b: int) -> int:\n"
-            "    return a + b\n"
-        )
-        return [FilePatch(path=target, content=content)]
-
-    if "calculator" in target or "add" in brief or "a + b" in brief or not brief:
-        fixed = current
-        fixed = re.sub(
-            r"def add\(a:\s*int,\s*b:\s*int\)\s*->\s*int:\s*\n\s*return .+",
-            "def add(a: int, b: int) -> int:\n    return a + b",
-            fixed,
-            count=1,
-        )
-        if fixed == current and "return a + b" not in current:
-            fixed = (
+        if target.endswith((".ts", ".tsx", ".js", ".jsx")):
+            content = (
+                "export function add(a, b) {\n"
+                "  return a + b;\n"
+                "}\n"
+            )
+        else:
+            content = (
                 '"""Calculator utilities."""\n\n'
                 "def add(a: int, b: int) -> int:\n"
                 "    return a + b\n"
             )
+        return [FilePatch(path=target, content=content)]
+
+    if "calculator" in target or "add" in brief or "a + b" in brief or not brief:
+        fixed = current
+        if target.endswith((".ts", ".tsx", ".js", ".jsx")):
+            fixed = re.sub(
+                r"function\s+add\s*\([^)]*\)\s*\{[\s\S]*?return\s+[^;]+;",
+                "function add(a, b) {\n  return a + b;",
+                fixed,
+                count=1,
+            )
+            if fixed == current and "return a + b" not in current:
+                fixed = "export function add(a, b) {\n  return a + b;\n}\n"
+        else:
+            fixed = re.sub(
+                r"def add\(a:\s*int,\s*b:\s*int\)\s*->\s*int:\s*\n\s*return .+",
+                "def add(a: int, b: int) -> int:\n    return a + b",
+                fixed,
+                count=1,
+            )
+            if fixed == current and "return a + b" not in current:
+                fixed = (
+                    '"""Calculator utilities."""\n\n'
+                    "def add(a: int, b: int) -> int:\n"
+                    "    return a + b\n"
+                )
         if fixed != current:
             return [FilePatch(path=target, content=fixed)]
 

@@ -26,6 +26,14 @@ llm = [
   "langchain-openai>=0.2",
   "dspy-ai>=2.5",
 ]
+e2b = [
+  "e2b>=1.0",
+]
+treesitter = [
+  "tree-sitter>=0.23",
+  "tree-sitter-python>=0.23",
+  "tree-sitter-typescript>=0.23",
+]
 dev = [
   "pytest>=8.0",
   "ruff>=0.6",
