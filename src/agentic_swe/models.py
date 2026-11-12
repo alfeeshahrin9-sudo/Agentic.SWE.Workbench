@@ -23,6 +23,7 @@ class RunStatus(str, Enum):
     CODING = "coding"
     TESTING = "testing"
     HEALING = "healing"
+    REVIEWING = "reviewing"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     ABORTED = "aborted"
@@ -93,6 +94,20 @@ class HealAttempt(BaseModel):
     test_result: TestResult | None = None
 
 
+class ReviewResult(BaseModel):
+    approved: bool
+    summary: str
+    issues: list[str] = Field(default_factory=list)
+    revision_brief: str = ""
+
+
+class PatchSet(BaseModel):
+    """LLM-facing schema for programmer / heal patch proposals."""
+
+    patches: list[FilePatch] = Field(default_factory=list)
+    notes: str = ""
+
+
 class RunState(BaseModel):
     run_id: str = Field(default_factory=lambda: new_id("run"))
     status: RunStatus = RunStatus.PENDING
@@ -103,8 +118,10 @@ class RunState(BaseModel):
     patches: list[FilePatch] = Field(default_factory=list)
     test_results: list[TestResult] = Field(default_factory=list)
     heal_attempts: list[HealAttempt] = Field(default_factory=list)
+    reviews: list[ReviewResult] = Field(default_factory=list)
     messages: list[str] = Field(default_factory=list)
     graph_summary: dict[str, Any] = Field(default_factory=dict)
+    auto_approve: bool = True
     error: str | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
