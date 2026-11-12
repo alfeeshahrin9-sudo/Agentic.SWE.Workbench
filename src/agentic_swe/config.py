@@ -20,8 +20,10 @@ class Settings(BaseSettings):
     max_heal_attempts: int = 5
     max_files_touched: int = 8
     command_timeout_sec: int = 120
+    sandbox_backend: str = Field(default="local")  # local | e2b
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-4o-mini", validation_alias="OPENAI_MODEL")
+    e2b_api_key: str | None = Field(default=None, validation_alias="E2B_API_KEY")
 
     @property
     def llm_enabled(self) -> bool:
