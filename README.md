@@ -34,8 +34,14 @@ agentic-swe graph examples/fixture_ts
 agentic-swe runs
 agentic-swe show <run_id>
 
-# MCP sandbox server
-agentic-swe mcp
+# MCP Server, Agent Session & Tools
+agentic-swe mcp                                # stdio MCP server (for Antigravity / Claude / Cursor)
+agentic-swe mcp --transport sse --port 8000    # HTTP/SSE MCP server for networked agents
+agentic-swe mcp-tools                          # list all exposed & external MCP tools
+agentic-swe mcp-agent -r examples/fixture_repo -t "fix add so that 2+2 equals 4"
+
+# Free / Student-Friendly LLM Providers (Ollama, GitHub Models, Groq, Gemini)
+agentic-swe run -r examples/fixture_repo -t "fix add" --provider ollama --mcp-tools
 ```
 
 ### Optional extras

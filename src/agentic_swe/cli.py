@@ -61,12 +61,26 @@ def run_cmd(
         "--feedback",
         help="Optional feedback attached to --approve/--reject",
     ),
+    provider: Optional[str] = typer.Option(
+        None,
+        "--provider",
+        help="LLM provider override: auto | openai | ollama | github | groq | gemini",
+    ),
+    mcp_tools: Optional[bool] = typer.Option(
+        None,
+        "--mcp-tools/--no-mcp-tools",
+        help="Enable MCP tool-calling loop for the Programmer agent",
+    ),
 ) -> None:
     """Run the multi-agent factory against a local repo (offline heuristics by default)."""
     if not repo.is_dir():
         raise typer.BadParameter(f"Repo not found: {repo}")
 
     settings = get_settings()
+    if provider is not None:
+        settings.llm_provider = provider
+    if mcp_tools is not None:
+        settings.use_mcp_tools = mcp_tools
     issue = Ticket(
         title=title or ticket[:72],
         description=ticket,
@@ -210,11 +224,79 @@ def show_cmd(
 
 
 @app.command("mcp")
-def mcp_cmd() -> None:
-    """Start the local sandbox MCP server over stdio."""
+def mcp_cmd(
+    transport: str = typer.Option(
+        "stdio",
+        "--transport",
+        help="MCP transport: stdio | sse | streamable-http",
+    ),
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind host for sse/streamable-http"),
+    port: int = typer.Option(8000, "--port", help="Bind port for sse/streamable-http"),
+) -> None:
+    """Start the Agentic SWE Workbench MCP server (stdio, sse, or streamable-http)."""
     from agentic_swe.sandbox.mcp_server import main as mcp_main
 
-    mcp_main()
+    err_console = Console(stderr=True)
+    if transport == "stdio":
+        err_console.print(
+            "[cyan]Agentic SWE MCP server running on stdio.[/cyan] "
+            "[dim]Waiting for MCP client JSON-RPC input (Ctrl+C to exit)...[/dim]"
+        )
+    else:
+        err_console.print(
+            f"[cyan]Starting Agentic SWE MCP server ({transport}) on http://{host}:{port}[/cyan]"
+        )
+    mcp_main(transport=transport, host=host, port=port)  # type: ignore[arg-type]
+
+
+@app.command("mcp-tools")
+def mcp_tools_cmd() -> None:
+    """List all tools exposed by the Agentic SWE MCP server and configured external MCP servers."""
+    from agentic_swe.mcp_client import MCPClientBridge, load_external_mcp_configs
+
+    bridge = MCPClientBridge()
+    tools = bridge.list_tools()
+    table = Table(title="Agentic SWE MCP Server Tools")
+    table.add_column("Tool Name", style="cyan")
+    table.add_column("Description")
+    for t in tools:
+        table.add_row(t["name"], t["description"])
+    console.print(table)
+
+    ext_configs = load_external_mcp_configs()
+    if ext_configs:
+        ext_table = Table(title="Configured External MCP Servers (mcp_servers.json)")
+        ext_table.add_column("Server", style="green")
+        ext_table.add_column("Command")
+        for cfg in ext_configs:
+            ext_table.add_row(cfg.name, f"{cfg.command} {' '.join(cfg.args)}")
+        console.print(ext_table)
+
+
+@app.command("mcp-agent")
+def mcp_agent_cmd(
+    repo: Path = typer.Option(..., "--repo", "-r", help="Path to local target repository"),
+    ticket: str = typer.Option(..., "--ticket", "-t", help="Natural-language issue description"),
+) -> None:
+    """Drive a ticket resolution end-to-end as an external agent over a live MCP ClientSession."""
+    from agentic_swe.mcp_client import run_mcp_agent_session
+
+    if not repo.is_dir():
+        raise typer.BadParameter(f"Repo not found: {repo}")
+
+    out = run_mcp_agent_session(repo_path=repo, ticket=ticket, settings=get_settings())
+    table = Table(title=f"MCP Agent Session ({out['run_id']})")
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("discovered_tools", str(len(out["discovered_tools"])))
+    table.add_row("target_file", str(out["target_file"]))
+    table.add_row("initial_test_passed", str(out["initial_test_passed"]))
+    table.add_row("final_test_passed", str(out["final_test_passed"]))
+    if out.get("diagnosis"):
+        table.add_row("diagnosis", str(out["diagnosis"].get("diagnosis", "")))
+    console.print(table)
+    if not out["final_test_passed"]:
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":

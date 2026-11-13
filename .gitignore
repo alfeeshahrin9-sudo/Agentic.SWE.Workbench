@@ -1,0 +1,21 @@
+# Virtual environments
+.venv/
+venv/
+
+# Python bytecode & build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Test & linter caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local workbench runs & secrets
+.runs/
+.env
+mcp_servers.json

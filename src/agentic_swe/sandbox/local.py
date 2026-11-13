@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -70,7 +72,7 @@ class LocalSandbox:
         files: list[str] = []
         for path in self.work_dir.glob(pattern):
             if path.is_file():
-                files.append(str(path.relative_to(self.work_dir)))
+                files.append(path.relative_to(self.work_dir).as_posix())
         return sorted(files)
 
     def run(
@@ -79,12 +81,26 @@ class LocalSandbox:
         timeout_sec: int | None = None,
     ) -> tuple[int, str, str, float]:
         timeout = timeout_sec or self.timeout_sec
-        cmd = command if isinstance(command, list) else ["bash", "-lc", command]
+        env = os.environ.copy()
+        venv_bin = str(Path(sys.executable).resolve().parent)
+        env["PATH"] = f"{venv_bin}{os.pathsep}{env.get('PATH', '')}"
+
+        use_shell = False
+        if isinstance(command, list):
+            cmd: str | list[str] = command
+        elif os.name == "nt":
+            cmd = command
+            use_shell = True
+        else:
+            cmd = ["bash", "-lc", command]
+
         started = time.perf_counter()
         try:
             proc = subprocess.run(
                 cmd,
                 cwd=self.work_dir,
+                env=env,
+                shell=use_shell,
                 capture_output=True,
                 text=True,
                 timeout=timeout,

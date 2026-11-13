@@ -42,7 +42,7 @@ def _index_python_into(root: Path, graph: DependencyGraph) -> None:
     for path in root.rglob("*.py"):
         if any(part in SKIP_DIRS for part in path.parts):
             continue
-        rel = str(path.relative_to(root))
+        rel = path.relative_to(root).as_posix()
         try:
             source = path.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=rel)

@@ -31,7 +31,7 @@ def index_typescript_sources(root: Path, graph: DependencyGraph | None = None) -
             continue
         if any(part in SKIP_DIRS for part in path.parts):
             continue
-        rel = str(path.relative_to(root))
+        rel = path.relative_to(root).as_posix()
         try:
             source = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):

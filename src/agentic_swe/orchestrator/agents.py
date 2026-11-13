@@ -6,7 +6,8 @@ from pathlib import Path
 from agentic_swe.code_intel import detect_test_command, index_repo
 from agentic_swe.config import Settings
 from agentic_swe.healing import diagnose_failure, refine_repair_brief
-from agentic_swe.llm import llm_available, structured_generate
+from agentic_swe.llm import llm_available, run_tool_calling_agent, structured_generate
+from agentic_swe.mcp_client import build_sandbox_langchain_tools
 from agentic_swe.models import (
     EditPlan,
     FilePatch,
@@ -276,6 +277,18 @@ def _llm_patches(
     if not llm_available(settings):
         return None
     assert state.plan is not None
+
+    if settings.use_mcp_tools:
+        mcp_patches = _mcp_tool_patches(
+            state,
+            sandbox,
+            settings,
+            repair_brief=repair_brief,
+            revision_brief=revision_brief,
+        )
+        if mcp_patches:
+            return mcp_patches
+
     targets: list[str] = []
     for step in state.plan.steps:
         targets.extend(step.target_files)
@@ -305,6 +318,44 @@ def _llm_patches(
         return None
     state.note("Programmer used LLM patch proposal")
     return patch_set.patches
+
+
+def _mcp_tool_patches(
+    state: RunState,
+    sandbox: LocalSandbox,
+    settings: Settings,
+    repair_brief: str | None = None,
+    revision_brief: str | None = None,
+) -> list[FilePatch] | None:
+    """Let the LLM Programmer explore and edit the sandbox via MCP tool calls."""
+    tools = build_sandbox_langchain_tools(sandbox, settings)
+    system = (
+        "You are an autonomous SWE Programmer agent connected to MCP sandbox and code-intel tools. "
+        "Inspect the target files, write minimal fixes using mcp_sandbox_write_file, and verify "
+        "with mcp_sandbox_run_tests. Do not weaken or delete tests."
+    )
+    user = (
+        f"Ticket: {state.ticket.title}\n{state.ticket.description}\n"
+        f"Plan summary: {state.plan.summary if state.plan else ''}\n"
+        f"Repair brief: {repair_brief or ''}\n"
+        f"Reviewer revision brief: {revision_brief or ''}\n"
+    )
+    executed = run_tool_calling_agent(settings, system=system, user=user, tools=tools)
+    if not executed:
+        return None
+
+    patches: list[FilePatch] = []
+    for call in executed:
+        if call.get("tool") == "mcp_sandbox_write_file":
+            args = call.get("args") or {}
+            path = args.get("path")
+            content = args.get("content")
+            if path and isinstance(content, str):
+                patches.append(FilePatch(path=str(path), content=content))
+    if patches:
+        state.note(f"Programmer executed {len(executed)} MCP tool call(s)")
+        return patches
+    return None
 
 
 def _llm_review(
