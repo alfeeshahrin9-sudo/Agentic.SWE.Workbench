@@ -5,8 +5,8 @@ from .indexer import index_python_repo, index_repo
 __all__ = [
     "DependencyGraph",
     "SymbolNode",
+    "detect_languages",
+    "detect_test_command",
     "index_python_repo",
     "index_repo",
-    "detect_test_command",
-    "detect_languages",
 ]

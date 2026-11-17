@@ -41,3 +41,36 @@ def test_heuristic_reviewer_approves_green_run(tmp_path: Path):
     out = reviewer_review(state, sandbox, settings)
     assert out.status == RunStatus.SUCCEEDED
     assert out.reviews[-1].approved
+
+
+def test_heuristic_reviewer_blocks_deleted_js_test(tmp_path: Path):
+    from agentic_swe.models import TestResult
+
+    work = tmp_path / "ws"
+    sandbox = LocalSandbox.from_repo(FIXTURE, work)
+    state = RunState(
+        ticket=Ticket(title="fix add", description="fix add"),
+        repo_path=str(FIXTURE),
+        work_dir=str(work),
+        status=RunStatus.REVIEWING,
+        plan=EditPlan(
+            summary="fix add",
+            steps=[PlanStep(description="fix", target_files=["src/calculator.py"])],
+            approved=True,
+        ),
+        patches=[
+            FilePatch(
+                path="test/calculator.test.js",
+                content="",
+                action="delete",
+            )
+        ],
+        test_results=[
+            TestResult(command="npm test", exit_code=0, stdout="ok", passed=True)
+        ],
+    )
+    settings = Settings(runs_dir=tmp_path / "runs")
+    out = reviewer_review(state, sandbox, settings)
+    assert out.status == RunStatus.CODING
+    assert not out.reviews[-1].approved
+    assert any("Deleted test file" in issue for issue in out.reviews[-1].issues)

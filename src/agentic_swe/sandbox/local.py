@@ -48,7 +48,7 @@ class LocalSandbox:
 
     def resolve(self, relative: str) -> Path:
         target = (self.work_dir / relative).resolve()
-        if not str(target).startswith(str(self.work_dir)):
+        if not target.is_relative_to(self.work_dir):
             raise SandboxError(f"Path escapes sandbox: {relative}")
         return target
 

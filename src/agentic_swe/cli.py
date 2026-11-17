@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -15,7 +14,7 @@ from agentic_swe.config import get_settings
 from agentic_swe.llm import llm_available
 from agentic_swe.models import Ticket
 from agentic_swe.observability import changed_files, list_runs, load_run
-from agentic_swe.orchestrator import run_factory
+from agentic_swe.orchestrator import resume_factory_run, run_factory
 
 app = typer.Typer(
     name="agentic-swe",
@@ -40,7 +39,7 @@ def version() -> None:
 def run_cmd(
     repo: Path = typer.Option(..., "--repo", "-r", help="Path to local target repository"),
     ticket: str = typer.Option(..., "--ticket", "-t", help="Natural-language issue description"),
-    title: Optional[str] = typer.Option(None, "--title", help="Optional short title"),
+    title: str | None = typer.Option(None, "--title", help="Optional short title"),
     auto_approve: bool = typer.Option(
         True,
         "--auto-approve/--no-auto-approve",
@@ -51,22 +50,22 @@ def run_cmd(
         "--interactive/--no-interactive",
         help="Prompt on stdin when plan approval is required",
     ),
-    approve: Optional[bool] = typer.Option(
+    approve: bool | None = typer.Option(
         None,
         "--approve/--reject",
         help="Non-interactive plan decision when --no-auto-approve is set",
     ),
-    feedback: Optional[str] = typer.Option(
+    feedback: str | None = typer.Option(
         None,
         "--feedback",
         help="Optional feedback attached to --approve/--reject",
     ),
-    provider: Optional[str] = typer.Option(
+    provider: str | None = typer.Option(
         None,
         "--provider",
         help="LLM provider override: auto | openai | ollama | github | groq | gemini",
     ),
-    mcp_tools: Optional[bool] = typer.Option(
+    mcp_tools: bool | None = typer.Option(
         None,
         "--mcp-tools/--no-mcp-tools",
         help="Enable MCP tool-calling loop for the Programmer agent",
@@ -134,12 +133,42 @@ def run_cmd(
 
     if result.status.value == "awaiting_approval":
         console.print(
-            "[yellow]Paused for plan approval.[/yellow] Re-run with "
-            "`--no-auto-approve --approve` or `--interactive`."
+            "[yellow]Paused for plan approval.[/yellow] Resume with "
+            f"`agentic-swe approve {result.run_id} --approve` or re-run with `--interactive`."
         )
         raise typer.Exit(code=2)
 
     if result.status.value != "succeeded":
+        raise typer.Exit(code=1)
+
+
+@app.command("approve")
+def approve_cmd(
+    run_id: str = typer.Argument(..., help="Paused run_id to approve or reject"),
+    approve: bool = typer.Option(
+        True,
+        "--approve/--reject",
+        help="Approve or reject the drafted plan",
+    ),
+    feedback: str = typer.Option("", "--feedback", help="Optional reviewer feedback"),
+) -> None:
+    """Resume a paused awaiting_approval run by run_id."""
+    settings = get_settings()
+    try:
+        result = resume_factory_run(
+            run_id=run_id,
+            approved=approve,
+            feedback=feedback,
+            settings=settings,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(
+        f"Run [cyan]{result.run_id}[/cyan] finished with status: [bold]{result.status.value}[/bold]"
+    )
+    if result.status.value not in {"succeeded", "aborted"}:
         raise typer.Exit(code=1)
 
 

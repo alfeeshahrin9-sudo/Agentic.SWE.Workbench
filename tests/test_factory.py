@@ -2,7 +2,7 @@ from pathlib import Path
 
 from agentic_swe.config import Settings
 from agentic_swe.models import RunStatus, Ticket
-from agentic_swe.orchestrator import run_factory
+from agentic_swe.orchestrator import resume_factory_run, run_factory
 
 FIXTURE = Path(__file__).resolve().parents[1] / "examples" / "fixture_repo"
 
@@ -64,3 +64,25 @@ def test_factory_rejects_plan(tmp_path: Path):
     )
     assert result.status == RunStatus.ABORTED
     assert result.error and "too risky" in result.error
+
+
+def test_resume_persisted_paused_run_by_id(tmp_path: Path):
+    settings = Settings(runs_dir=tmp_path / "runs")
+    ticket = Ticket(title="fix add", description="fix add so that 2+2 equals 4")
+    paused = run_factory(
+        ticket=ticket,
+        repo_path=FIXTURE,
+        settings=settings,
+        auto_approve=False,
+    )
+    assert paused.status == RunStatus.AWAITING_APPROVAL
+
+    resumed = resume_factory_run(
+        run_id=paused.run_id,
+        approved=True,
+        feedback="looks good",
+        settings=settings,
+    )
+    assert resumed.run_id == paused.run_id
+    assert resumed.status == RunStatus.SUCCEEDED
+    assert resumed.test_results[-1].passed
