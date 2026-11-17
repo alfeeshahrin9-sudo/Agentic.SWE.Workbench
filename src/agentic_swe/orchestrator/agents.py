@@ -208,8 +208,7 @@ def reviewer_review(state: RunState, sandbox: LocalSandbox, settings: Settings) 
 
 
 def _apply_patches(state: RunState, sandbox: LocalSandbox, settings: Settings) -> None:
-    touched = 0
-    for patch in state.patches:
+    for touched, patch in enumerate(state.patches):
         if touched >= settings.max_files_touched:
             state.note("Max files touched - skipping remaining patches")
             break
@@ -217,7 +216,6 @@ def _apply_patches(state: RunState, sandbox: LocalSandbox, settings: Settings) -
             sandbox.delete_file(patch.path)
         else:
             sandbox.write_file(patch.path, patch.content)
-        touched += 1
         state.note(f"Programmer wrote {patch.path}")
 
 
@@ -383,12 +381,28 @@ def _llm_review(
     return review
 
 
+def _is_test_file(path: str) -> bool:
+    norm = path.replace("\\", "/")
+    name = norm.rsplit("/", 1)[-1]
+    return (
+        norm.startswith(("tests/", "test/"))
+        or "/tests/" in f"/{norm}"
+        or "/test/" in f"/{norm}"
+        or name.startswith("test_")
+        or name.endswith(("_test.py", ".test.ts", ".test.js", ".test.tsx", ".spec.ts", ".spec.js"))
+    )
+
+
 def _heuristic_review(state: RunState, sandbox: LocalSandbox) -> ReviewResult:
     issues: list[str] = []
     for patch in state.patches:
-        if patch.path.startswith("tests/") and patch.action == "delete":
+        if _is_test_file(patch.path) and patch.action == "delete":
             issues.append(f"Deleted test file {patch.path}")
-        if patch.path.startswith("tests/") and "assert" not in patch.content:
+        if (
+            _is_test_file(patch.path)
+            and "assert" not in patch.content
+            and "expect(" not in patch.content
+        ):
             issues.append(f"Test file {patch.path} may have been hollowed out")
 
     # Ensure production code still exists for planned targets

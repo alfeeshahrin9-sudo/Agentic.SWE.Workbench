@@ -16,7 +16,7 @@ from agentic_swe.config import Settings, get_settings
 from agentic_swe.healing import diagnose_failure, refine_repair_brief
 from agentic_swe.models import RunState, RunStatus, TestResult, Ticket, new_id
 from agentic_swe.observability import changed_files, list_runs, load_run
-from agentic_swe.orchestrator import run_factory
+from agentic_swe.orchestrator import resume_factory_run, run_factory
 from agentic_swe.orchestrator.agents import planner_plan
 from agentic_swe.sandbox.local import LocalSandbox
 from agentic_swe.sandbox.manager import SandboxManager
@@ -244,13 +244,26 @@ def factory_run(
 
 @mcp.tool()
 def factory_approve(
-    repo_path: str,
-    ticket: str,
+    run_id: str | None = None,
+    repo_path: str | None = None,
+    ticket: str | None = None,
     approved: bool = True,
     feedback: str = "",
     title: str | None = None,
 ) -> dict[str, Any]:
-    """Execute the factory with an explicit human-in-the-loop plan approval or rejection decision."""
+    """Approve or reject a paused run by run_id (or start a new run with an explicit HITL decision)."""
+    if run_id:
+        resumed = resume_factory_run(
+            run_id=run_id,
+            approved=approved,
+            feedback=feedback,
+            settings=_settings,
+        )
+        return _format_run_state(resumed)
+
+    if not repo_path or not ticket:
+        raise ValueError("Provide either run_id to resume a paused run, or both repo_path and ticket.")
+
     root = Path(repo_path).resolve()
     if not root.is_dir():
         raise ValueError(f"Repository not found: {repo_path}")

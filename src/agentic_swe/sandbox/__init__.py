@@ -4,8 +4,8 @@ from .manager import SandboxManager
 from .protocol import Sandbox
 
 __all__ = [
-    "Sandbox",
     "LocalSandbox",
+    "Sandbox",
     "SandboxError",
     "SandboxManager",
     "create_sandbox",

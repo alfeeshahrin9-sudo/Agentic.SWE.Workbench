@@ -13,13 +13,25 @@ class FailureInfo:
     raw_excerpt: str
 
 
-_TEST_RE = re.compile(r"^(FAILED|ERROR)\s+([^\s]+)", re.MULTILINE)
-_ASSERT_RE = re.compile(r"AssertionError:?\s*(.*)", re.MULTILINE)
+_PYTEST_TEST_RE = re.compile(r"^(?:FAILED|ERROR)\s+([^\s]+)", re.MULTILINE)
+_NODE_TAP_RE = re.compile(r"^not ok \d+\s+-\s+(.+)$", re.MULTILINE)
+_NODE_SYM_RE = re.compile(r"^[✖✗×]\s+([^\n(]+)", re.MULTILINE)
+_ASSERT_RE = re.compile(r"AssertionError(?:\s*\[ERR_ASSERTION\])?:?\s*(.*)", re.MULTILINE)
 _E_RE = re.compile(r"^E\s+(.*)$", re.MULTILINE)
 
 
 def parse_pytest_failures(output: str) -> FailureInfo:
-    failing = [m.group(2) for m in _TEST_RE.finditer(output)]
+    """Parse failure names and assertion hints from pytest or Node/TS test runners."""
+    failing = [m.group(1).strip() for m in _PYTEST_TEST_RE.finditer(output)]
+    if not failing:
+        failing = [m.group(1).strip() for m in _NODE_TAP_RE.finditer(output)]
+    if not failing:
+        failing = [
+            m.group(1).strip()
+            for m in _NODE_SYM_RE.finditer(output)
+            if not m.group(1).strip().startswith("failing tests")
+        ]
+
     assertions = [m.group(1).strip() for m in _ASSERT_RE.finditer(output) if m.group(1).strip()]
     e_lines = [m.group(1).strip() for m in _E_RE.finditer(output) if m.group(1).strip()]
     hints = assertions or e_lines
@@ -46,11 +58,16 @@ def diagnose_failure(test_result: TestResult) -> tuple[str, str]:
         f"module referenced by: {failing}. Do not weaken or delete tests."
     )
 
+    is_js_ts = "npm" in test_result.command.lower() or "node" in test_result.command.lower()
+    target_hint = "src/calculator.js" if is_js_ts else "src/calculator.py"
+
     # Heuristic for the fixture: add() returns wrong sum
-    if "add" in blob.lower() and ("== 4" in blob or "expected" in blob.lower()):
+    if "add" in blob.lower() and (
+        "== 4" in blob or "expected" in blob.lower() or "err_assertion" in blob.lower()
+    ):
         repair_brief = (
             "The `add` function returns an incorrect result for simple arithmetic. "
-            "Update `src/calculator.py` so `add(a, b)` returns `a + b`."
+            f"Update `{target_hint}` so `add(a, b)` returns `a + b`."
         )
 
     return diagnosis, repair_brief

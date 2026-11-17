@@ -234,6 +234,48 @@ def run_factory(
     return final
 
 
+def resume_factory_run(
+    run_id: str,
+    approved: bool = True,
+    feedback: str = "",
+    settings: Settings | None = None,
+) -> RunState:
+    """Resume a persisted run that is currently paused in AWAITING_APPROVAL."""
+    from agentic_swe.observability import load_run
+    from agentic_swe.sandbox.local import LocalSandbox
+
+    settings = settings or get_settings()
+    run = load_run(run_id, settings=settings)
+    if run.plan is None:
+        raise ValueError(f"Run {run_id} has no drafted plan to approve or reject.")
+
+    run = approve_plan(run, {"approved": approved, "feedback": feedback})
+    if run.status == RunStatus.ABORTED:
+        persist_run(run, settings.runs_dir)
+        return run
+
+    work_path = Path(run.work_dir) if run.work_dir else (settings.runs_dir / run.run_id / "workspace")
+    sandbox = LocalSandbox(work_path, timeout_sec=settings.command_timeout_sec)
+    run.work_dir = str(sandbox.work_dir)
+
+    while True:
+        run = programmer_apply(run, sandbox, settings)
+        while run.status == RunStatus.HEALING:
+            if len(run.heal_attempts) >= settings.max_heal_attempts:
+                run.status = RunStatus.FAILED
+                run.error = "Heal attempts exhausted"
+                break
+            run = diagnostic_heal(run, sandbox, settings)
+        if run.status == RunStatus.REVIEWING:
+            run = reviewer_review(run, sandbox, settings)
+            if run.status == RunStatus.CODING:
+                continue
+        break
+
+    persist_run(run, settings.runs_dir)
+    return run
+
+
 def _interrupt_payload(result: Any) -> dict[str, Any] | None:
     if not isinstance(result, dict):
         return None

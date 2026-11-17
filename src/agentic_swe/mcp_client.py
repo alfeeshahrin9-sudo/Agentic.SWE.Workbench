@@ -10,10 +10,11 @@ Links the workbench's internal agents to:
 """
 
 import json
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 import anyio
 from mcp.client.session import ClientSession
@@ -191,7 +192,8 @@ def run_mcp_agent_session(
     indexing the repo, creating an isolated sandbox, patching code, running tests, and
     diagnosing/healing over the wire. Works 100% offline and free.
     """
-    from agentic_swe.sandbox.mcp_server import configure_server, mcp as workbench_mcp
+    from agentic_swe.sandbox.mcp_server import configure_server
+    from agentic_swe.sandbox.mcp_server import mcp as workbench_mcp
 
     cfg = settings or get_settings()
     configure_server(cfg)

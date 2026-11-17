@@ -24,3 +24,26 @@ def test_diagnose_and_refine():
     assert "exited" in diagnosis
     refined = refine_repair_brief(diagnosis, brief, prior_attempts=2)
     assert "Prior" in refined or "narrow" in refined.lower() or "smallest" in refined.lower()
+
+
+def test_parse_and_diagnose_node_test_failures():
+    node_output = """
+not ok 1 - add simple
+  ---
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  0 !== 4
+"""
+    info = parse_pytest_failures(node_output)
+    assert "add simple" in info.failing_tests
+    assert info.assertion_hints
+
+    result = TestResult(
+        command="npm test",
+        exit_code=1,
+        stdout=node_output,
+        stderr="",
+        passed=False,
+    )
+    diagnosis, brief = diagnose_failure(result)
+    assert "add simple" in diagnosis
+    assert "src/calculator.js" in brief
