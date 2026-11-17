@@ -15,7 +15,7 @@ class FailureInfo:
 
 _PYTEST_TEST_RE = re.compile(r"^(?:FAILED|ERROR)\s+([^\s]+)", re.MULTILINE)
 _NODE_TAP_RE = re.compile(r"^not ok \d+\s+-\s+(.+)$", re.MULTILINE)
-_NODE_SYM_RE = re.compile(r"^[✖✗×]\s+([^\n(]+)", re.MULTILINE)
+_NODE_SYM_RE = re.compile(r"^[✖✗]\s+([^\n(]+)", re.MULTILINE)
 _ASSERT_RE = re.compile(r"AssertionError(?:\s*\[ERR_ASSERTION\])?:?\s*(.*)", re.MULTILINE)
 _E_RE = re.compile(r"^E\s+(.*)$", re.MULTILINE)
 

@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """MCP tool surface exposing both the isolated Sandbox and the Multi-Agent SWE Factory.
 
 Supports stdio (default for IDE agents like Antigravity, Claude Code, Cursor)
 as well as SSE and Streamable-HTTP transports for remote/networked agents.
 """
+
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Literal

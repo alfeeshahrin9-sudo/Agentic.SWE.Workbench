@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """DSPy-facing stubs for patch-prompt refinement.
 
 When `dspy-ai` is installed and an API key is present, `PatchRefiner` can be
 wired to a real DSPy program. The groundbase always exposes a deterministic
 fallback so the factory works offline.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 

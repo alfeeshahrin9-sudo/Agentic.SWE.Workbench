@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """MCP Client bridge for Agentic SWE Workbench.
 
 Links the workbench's internal agents to:
@@ -8,6 +6,8 @@ Links the workbench's internal agents to:
 3. LangChain `StructuredTool` wrappers so LLM-backed agents can invoke MCP tools
    in a ReAct / tool-calling loop.
 """
+
+from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
