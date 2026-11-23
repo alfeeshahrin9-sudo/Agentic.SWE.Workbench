@@ -7,7 +7,6 @@ import sys
 import time
 from pathlib import Path
 
-
 from .policy import CommandPolicy
 from .protocol import SandboxError
 
