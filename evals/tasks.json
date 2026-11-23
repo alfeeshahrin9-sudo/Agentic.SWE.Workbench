@@ -1,0 +1,40 @@
+{
+  "tasks": [
+    {
+      "task_id": "py-calc-add",
+      "repo_path": "examples/fixture_repo",
+      "ticket_title": "Fix add() arithmetic bug in calculator.py",
+      "ticket_description": "Update src/calculator.py so add(a, b) returns a + b and unit tests pass.",
+      "acceptance_criteria": [
+        "pytest -q exits 0",
+        "Only src/calculator.py is modified"
+      ],
+      "required_substrings": {
+        "src/calculator.py": ["def add(a: int, b: int) -> int:", "return a + b"]
+      },
+      "forbidden_substrings": {
+        "src/calculator.py": ["return a - b"]
+      },
+      "expected_touched_files": ["src/calculator.py"],
+      "max_heal_attempts": 3
+    },
+    {
+      "task_id": "ts-calc-add",
+      "repo_path": "examples/fixture_ts",
+      "ticket_title": "Fix add() arithmetic bug in calculator.js",
+      "ticket_description": "Update src/calculator.js so add(a, b) returns a + b and npm test passes.",
+      "acceptance_criteria": [
+        "npm test exits 0",
+        "Only src/calculator.js is modified"
+      ],
+      "required_substrings": {
+        "src/calculator.js": ["return a + b"]
+      },
+      "forbidden_substrings": {
+        "src/calculator.js": ["return a - b"]
+      },
+      "expected_touched_files": ["src/calculator.js"],
+      "max_heal_attempts": 3
+    }
+  ]
+}

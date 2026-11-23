@@ -255,7 +255,22 @@ def resume_factory_run(
         return run
 
     work_path = Path(run.work_dir) if run.work_dir else (settings.runs_dir / run.run_id / "workspace")
-    sandbox = LocalSandbox(work_path, timeout_sec=settings.command_timeout_sec)
+    from agentic_swe.sandbox.policy import CommandPolicy
+
+    policy = CommandPolicy.from_mode(
+        settings.command_policy_mode,
+        extra_allowlist=settings.command_allowlist,
+    )
+    if (settings.sandbox_backend or "local").lower().strip() == "docker":
+        from agentic_swe.sandbox.docker_backend import DockerSandbox
+
+        sandbox = DockerSandbox(work_path, settings=settings, policy=policy)
+    else:
+        sandbox = LocalSandbox(
+            work_path,
+            timeout_sec=settings.command_timeout_sec,
+            policy=policy,
+        )
     run.work_dir = str(sandbox.work_dir)
 
     while True:

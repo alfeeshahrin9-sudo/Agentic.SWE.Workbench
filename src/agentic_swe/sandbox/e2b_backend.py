@@ -12,7 +12,9 @@ from pathlib import Path
 
 from agentic_swe.config import Settings
 
-from .local import LocalSandbox, SandboxError
+from .local import LocalSandbox
+from .policy import CommandPolicy
+from .protocol import SandboxError
 
 
 class E2BSandbox:
@@ -23,12 +25,21 @@ class E2BSandbox:
         work_dir: Path,
         settings: Settings,
         sandbox: object,
+        policy: CommandPolicy | None = None,
     ) -> None:
         self.work_dir = work_dir.resolve()
         self.settings = settings
         self.timeout_sec = settings.command_timeout_sec
         self._sandbox = sandbox
-        self._local = LocalSandbox(work_dir=self.work_dir, timeout_sec=self.timeout_sec)
+        self.policy = policy or CommandPolicy.from_mode(
+            settings.command_policy_mode,
+            extra_allowlist=settings.command_allowlist,
+        )
+        self._local = LocalSandbox(
+            work_dir=self.work_dir,
+            timeout_sec=self.timeout_sec,
+            policy=self.policy,
+        )
 
     @classmethod
     def from_repo(
@@ -112,6 +123,7 @@ class E2BSandbox:
         command: str | list[str],
         timeout_sec: int | None = None,
     ) -> tuple[int, str, str, float]:
+        self.policy.check(command)
         timeout = timeout_sec or self.timeout_sec
         if isinstance(command, list):
             cmd = " ".join(command)
