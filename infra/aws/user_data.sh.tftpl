@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+dnf update -y
+dnf install -y docker git python3.12 python3.12-pip
+
+systemctl enable --now docker
+usermod -aG docker ec2-user || true
+
+WORKDIR="/opt/agentic-swe"
+git clone "${repo_url}" "$WORKDIR"
+cd "$WORKDIR"
+
+python3.12 -m venv .venv
+.venv/bin/pip install --upgrade pip
+.venv/bin/pip install -e ".[dev]"
+
+docker build -t "${sandbox_image}" .
+
+# Run initial verification suite inside hardened DockerSandbox and upload report to S3.
+export AGENTIC_SWE_SANDBOX_BACKEND=docker
+export AGENTIC_SWE_DOCKER_IMAGE="${sandbox_image}"
+export AGENTIC_SWE_COMMAND_POLICY_MODE=strict
+
+.venv/bin/agentic-swe eval \
+  --tasks evals/tasks.json \
+  --backend docker \
+  --policy strict \
+  --output /tmp/eval-report.json || true
+
+if [ -f /tmp/eval-report.json ]; then
+  aws s3 cp /tmp/eval-report.json "s3://${bucket_name}/bootstrap/eval-report.json" || true
+fi

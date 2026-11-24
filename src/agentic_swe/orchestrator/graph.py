@@ -243,6 +243,7 @@ def resume_factory_run(
     """Resume a persisted run that is currently paused in AWAITING_APPROVAL."""
     from agentic_swe.observability import load_run
     from agentic_swe.sandbox.local import LocalSandbox
+    from agentic_swe.sandbox.policy import CommandPolicy
 
     settings = settings or get_settings()
     run = load_run(run_id, settings=settings)
@@ -255,7 +256,20 @@ def resume_factory_run(
         return run
 
     work_path = Path(run.work_dir) if run.work_dir else (settings.runs_dir / run.run_id / "workspace")
-    sandbox = LocalSandbox(work_path, timeout_sec=settings.command_timeout_sec)
+    policy = CommandPolicy.from_mode(
+        settings.command_policy_mode,
+        extra_allowlist=settings.command_allowlist,
+    )
+    if (settings.sandbox_backend or "local").lower().strip() == "docker":
+        from agentic_swe.sandbox.docker_backend import DockerSandbox
+
+        sandbox = DockerSandbox(work_path, settings=settings, policy=policy)
+    else:
+        sandbox = LocalSandbox(
+            work_path,
+            timeout_sec=settings.command_timeout_sec,
+            policy=policy,
+        )
     run.work_dir = str(sandbox.work_dir)
 
     while True:

@@ -20,7 +20,14 @@ class Settings(BaseSettings):
     max_heal_attempts: int = 5
     max_files_touched: int = 8
     command_timeout_sec: int = 120
-    sandbox_backend: str = Field(default="local")  # local | e2b
+    sandbox_backend: str = Field(default="local")  # local | docker | e2b
+    command_policy_mode: str = Field(default="standard")  # strict | standard | off
+    command_allowlist: list[str] = Field(default_factory=list)
+    docker_image: str = Field(default="agentic-swe-sandbox:latest")
+    docker_network_mode: str = Field(default="none")
+    docker_cpus: str = Field(default="1.0")
+    docker_memory: str = Field(default="512m")
+    docker_pids_limit: int = Field(default=128)
     llm_provider: str = Field(default="auto")  # auto | openai | ollama | github | groq | gemini
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     openai_base_url: str | None = Field(default=None, validation_alias="OPENAI_BASE_URL")

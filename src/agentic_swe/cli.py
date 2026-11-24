@@ -328,5 +328,91 @@ def mcp_agent_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("eval")
+def eval_cmd(
+    tasks: Path = typer.Option(
+        Path("evals/tasks.json"),
+        "--tasks",
+        help="Path to JSON evaluation task manifest",
+    ),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Optional path to write machine-readable JSON evaluation report",
+    ),
+    task_id: list[str] | None = typer.Option(
+        None,
+        "--task-id",
+        help="Filter to one or more specific task IDs",
+    ),
+    backend: str | None = typer.Option(
+        None,
+        "--backend",
+        help="Sandbox backend override: local | docker | e2b",
+    ),
+    policy: str | None = typer.Option(
+        None,
+        "--policy",
+        help="Command-safety policy override: strict | standard | off",
+    ),
+    min_pass_rate: float = typer.Option(
+        1.0,
+        "--min-pass-rate",
+        help="Minimum required pass rate (0.0 to 1.0) before exiting non-zero",
+    ),
+) -> None:
+    """Run the gold-patch evaluation harness and report pass / gold-match rates."""
+    from agentic_swe.eval import run_evaluation
+
+    settings = get_settings()
+    if backend is not None:
+        settings.sandbox_backend = backend
+    if policy is not None:
+        settings.command_policy_mode = policy
+
+    try:
+        report = run_evaluation(
+            tasks_file=tasks,
+            settings=settings,
+            output_path=output,
+            task_ids=task_id,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    table = Table(
+        title=(
+            f"Gold-Patch Evaluation ({report.passed_tasks}/{report.total_tasks} passed, "
+            f"pass_rate={report.pass_rate:.0%}, gold={report.gold_match_rate:.0%})"
+        )
+    )
+    table.add_column("task_id", style="cyan")
+    table.add_column("status")
+    table.add_column("passed")
+    table.add_column("gold")
+    table.add_column("budget")
+    table.add_column("heals")
+    table.add_column("sec")
+    for r in report.results:
+        table.add_row(
+            r.task_id,
+            r.status,
+            "yes" if r.passed else "no",
+            "yes" if r.gold_match else "no",
+            "yes" if r.within_file_budget else "no",
+            str(r.heal_attempts),
+            f"{r.duration_sec:.2f}",
+        )
+    console.print(table)
+
+    if output is not None:
+        console.print(f"Report written to [cyan]{output}[/cyan]")
+
+    if report.total_tasks == 0 or report.pass_rate < min_pass_rate:
+        raise typer.Exit(code=1)
+
+
 if __name__ == "__main__":
     app()

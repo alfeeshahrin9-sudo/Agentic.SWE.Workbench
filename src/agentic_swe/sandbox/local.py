@@ -7,17 +7,22 @@ import sys
 import time
 from pathlib import Path
 
-
-class SandboxError(RuntimeError):
-    pass
+from .policy import CommandPolicy
+from .protocol import SandboxError
 
 
 class LocalSandbox:
     """Isolated worktree under a run directory. Commands are cwd-bound to work_dir."""
 
-    def __init__(self, work_dir: Path, timeout_sec: int = 120) -> None:
+    def __init__(
+        self,
+        work_dir: Path,
+        timeout_sec: int = 120,
+        policy: CommandPolicy | None = None,
+    ) -> None:
         self.work_dir = work_dir.resolve()
         self.timeout_sec = timeout_sec
+        self.policy = policy or CommandPolicy()
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
@@ -26,6 +31,7 @@ class LocalSandbox:
         source_repo: Path,
         work_dir: Path,
         timeout_sec: int = 120,
+        policy: CommandPolicy | None = None,
     ) -> LocalSandbox:
         source = source_repo.resolve()
         if not source.is_dir():
@@ -44,7 +50,7 @@ class LocalSandbox:
                 "*.egg-info",
             ),
         )
-        return cls(work_dir=work_dir, timeout_sec=timeout_sec)
+        return cls(work_dir=work_dir, timeout_sec=timeout_sec, policy=policy)
 
     def resolve(self, relative: str) -> Path:
         target = (self.work_dir / relative).resolve()
@@ -80,6 +86,7 @@ class LocalSandbox:
         command: str | list[str],
         timeout_sec: int | None = None,
     ) -> tuple[int, str, str, float]:
+        self.policy.check(command)
         timeout = timeout_sec or self.timeout_sec
         env = os.environ.copy()
         venv_bin = str(Path(sys.executable).resolve().parent)

@@ -4,6 +4,10 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 
+class SandboxError(RuntimeError):
+    """Base error raised by sandbox implementations and safety policies."""
+
+
 @runtime_checkable
 class Sandbox(Protocol):
     """Pluggable isolated execution environment."""

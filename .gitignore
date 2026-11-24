@@ -19,3 +19,11 @@ build/
 .runs/
 .env
 mcp_servers.json
+eval-report.json
+docker-eval-report.json
+
+# Terraform state & provider cache
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan

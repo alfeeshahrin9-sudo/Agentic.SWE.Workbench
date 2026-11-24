@@ -334,6 +334,21 @@ agentic-swe runs
 agentic-swe show <run_id>
 ```
 
+### 6. Gold-Patch Evaluation Harness & Docker Sandboxing (`agentic-swe eval`)
+
+Run reproducible benchmark tasks with deterministic command-safety enforcement (`strict`, `standard`, or `off`) and optional hardened Docker container isolation (`--network=none`, `--cap-drop=ALL`, `--read-only`):
+
+```bash
+# Run gold-patch evaluation suite locally under strict command-safety policy
+agentic-swe eval --tasks evals/tasks.json --policy strict --output eval-report.json
+
+# Build the hardened sandbox container image and run evals inside Docker
+docker build -t agentic-swe-sandbox:latest .
+agentic-swe eval --tasks evals/tasks.json --backend docker --policy strict --output docker-eval-report.json
+```
+
+For remote/ephemeral cloud execution, see the optional AWS/Terraform runner in [`infra/aws/README.md`](infra/aws/README.md). Every push and pull request is verified by [`.github/workflows/ci.yml`](.github/workflows/ci.yml) across Python 3.11/3.12 lint & unit tests, gold-patch evaluation, Docker sandbox smoke testing, and Terraform validation.
+
 ---
 
 ## Model Context Protocol (MCP) Integration
@@ -405,7 +420,13 @@ Settings are managed via `pydantic-settings` (`src/agentic_swe/config.py`) and c
 | `AGENTIC_SWE_MAX_HEAL_ATTEMPTS` | `5` | Hard cap on self-healing diagnostic iterations and review revision loops. |
 | `AGENTIC_SWE_MAX_FILES_TOUCHED` | `8` | Maximum number of files the Programmer agent may modify in a single pass. |
 | `AGENTIC_SWE_COMMAND_TIMEOUT_SEC` | `120` | Subprocess execution timeout (in seconds) for sandbox commands and tests. |
-| `AGENTIC_SWE_SANDBOX_BACKEND` | `local` | Sandbox backend: `local` (isolated directory copy) or `e2b` (cloud container). |
+| `AGENTIC_SWE_SANDBOX_BACKEND` | `local` | Sandbox backend: `local` (isolated directory copy), `docker` (hardened container), or `e2b` (cloud container). |
+| `AGENTIC_SWE_COMMAND_POLICY_MODE` | `standard` | Deterministic pre-execution command policy: `strict` (allowlist + no shell chaining), `standard` (denylist), or `off`. |
+| `AGENTIC_SWE_DOCKER_IMAGE` | `agentic-swe-sandbox:latest` | Docker image used when `AGENTIC_SWE_SANDBOX_BACKEND=docker`. |
+| `AGENTIC_SWE_DOCKER_NETWORK_MODE` | `none` | Container network mode (`none` disables egress by default). |
+| `AGENTIC_SWE_DOCKER_CPUS` | `1.0` | CPU quota for Docker sandbox containers. |
+| `AGENTIC_SWE_DOCKER_MEMORY` | `512m` | Memory cap for Docker sandbox containers. |
+| `AGENTIC_SWE_DOCKER_PIDS_LIMIT` | `128` | Maximum process count inside Docker sandbox containers. |
 | `AGENTIC_SWE_LLM_PROVIDER` | `auto` | LLM provider routing: `auto`, `openai`, `ollama`, `github`, `groq`, or `gemini`. |
 | `AGENTIC_SWE_OLLAMA_BASE_URL` | `http://localhost:11434/v1` | Base URL used when `llm_provider=ollama`. |
 | `AGENTIC_SWE_USE_MCP_TOOLS` | `false` | Enable the MCP tool-calling ReAct loop inside the Programmer agent. |
