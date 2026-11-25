@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
@@ -16,7 +16,7 @@ def new_id(prefix: str = "run") -> str:
     return f"{prefix}_{uuid4().hex[:12]}"
 
 
-class RunStatus(str, Enum):
+class RunStatus(StrEnum):
     PENDING = "pending"
     PLANNING = "planning"
     AWAITING_APPROVAL = "awaiting_approval"
