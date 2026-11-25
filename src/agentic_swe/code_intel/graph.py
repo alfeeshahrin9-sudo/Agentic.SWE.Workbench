@@ -36,16 +36,21 @@ class DependencyGraph:
 
     def find_files_for_keywords(self, keywords: Iterable[str]) -> list[str]:
         keys = [k.lower() for k in keywords if k]
-        hits: set[str] = set()
+        scores: dict[str, int] = defaultdict(int)
         for symbol in self.symbols.values():
             blob = f"{symbol.name} {symbol.path} {symbol.docstring or ''}".lower()
-            if any(k in blob for k in keys):
-                hits.add(symbol.path)
+            matched = sum(1 for k in keys if k in blob)
+            if matched:
+                scores[symbol.path] += matched
         for path, imported in self.imports.items():
             blob = f"{path} {' '.join(imported)}".lower()
-            if any(k in blob for k in keys):
-                hits.add(path)
-        return sorted(hits)
+            matched = sum(1 for k in keys if k in blob)
+            if matched:
+                scores[path] += matched
+        return sorted(
+            scores,
+            key=lambda p: (-scores[p], p.endswith("__init__.py"), p),
+        )
 
     def importers_of(self, module_hint: str) -> list[str]:
         hint = module_hint.lower()

@@ -142,12 +142,15 @@ def test_external_stdio_mcp_client_bridge(tmp_path: Path):
 
 
 def test_free_llm_provider_settings():
+    import importlib.util
+
     # Ollama requires zero API key
     ollama_cfg = Settings(llm_provider="ollama", openai_api_key=None)
     assert ollama_cfg.llm_enabled is True
     assert ollama_cfg.resolved_api_key == "ollama"
     assert ollama_cfg.resolved_base_url == "http://localhost:11434/v1"
-    assert llm_available(ollama_cfg) is True
+    has_langchain_openai = importlib.util.find_spec("langchain_openai") is not None
+    assert llm_available(ollama_cfg) is has_langchain_openai
 
     # GitHub Models / Groq / Gemini base URL resolution
     gh_cfg = Settings(llm_provider="github", openai_api_key="ghp_test")
