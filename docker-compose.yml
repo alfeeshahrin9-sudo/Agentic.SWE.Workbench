@@ -1,0 +1,36 @@
+services:
+  sandbox-image:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agentic-swe-sandbox:latest
+    command: ["pytest", "--version"]
+
+  eval-suite:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+    command:
+      - bash
+      - -lc
+      - |
+        apt-get update && apt-get install -y --no-install-recommends nodejs npm git &&
+        pip install -e ".[dev]" &&
+        ruff check src tests &&
+        pytest -q &&
+        agentic-swe eval --tasks evals/tasks.json --policy strict --min-pass-rate 1.0
+
+  mcp-server:
+    image: python:3.12-slim
+    working_dir: /app
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    command:
+      - bash
+      - -lc
+      - |
+        pip install -e "." &&
+        agentic-swe mcp --transport sse --host 0.0.0.0 --port 8000
