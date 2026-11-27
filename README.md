@@ -345,7 +345,17 @@ agentic-swe eval --tasks evals/tasks.json --policy strict --output eval-report.j
 # Build the hardened sandbox container image and run evals inside Docker
 docker build -t agentic-swe-sandbox:latest .
 agentic-swe eval --tasks evals/tasks.json --backend docker --policy strict --output docker-eval-report.json
+
+# Or run the full stack via Docker Compose (sandbox-image, eval-suite, and mcp-server)
+docker compose up --build
 ```
+
+> **Note (No Docker / Hardware Virtualization Disabled):** If Docker Desktop is unavailable or BIOS/UEFI hardware virtualization (`VT-x` / `AMD-V`) is disabled on your machine, the entire `eval-suite` and `mcp-server` stack runs 100% natively using `LocalSandbox` (`--backend local`, the default):
+> ```bash
+> ruff check src tests && pytest -q
+> agentic-swe eval --tasks evals/tasks.json --policy strict --min-pass-rate 1.0
+> agentic-swe mcp --transport sse --host 127.0.0.1 --port 8000
+> ```
 
 For remote/ephemeral cloud execution, see the optional AWS/Terraform runner in [`infra/aws/README.md`](infra/aws/README.md). Every push and pull request is verified by [`.github/workflows/ci.yml`](.github/workflows/ci.yml) across Python 3.11/3.12 lint & unit tests, gold-patch evaluation, Docker sandbox smoke testing, and Terraform validation.
 
