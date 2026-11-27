@@ -1,0 +1,153 @@
+name: Code Quality, Security & AI PR Review
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: code-review-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql-sast:
+    name: GitHub CodeQL Semantic Analysis (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          queries: security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
+
+  static-security-and-types:
+    name: Ruff PR Annotations, Bandit SAST & Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package and free security/quality checkers
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" bandit pip-audit
+
+      - name: Ruff Lint (with inline GitHub PR annotations)
+        run: ruff check --output-format=github src tests
+
+      - name: Ruff Format Check
+        run: ruff format --check src tests || true
+
+      - name: Bandit Python Security Checker (SAST)
+        run: bandit -r src -ll -ii
+
+      - name: Dependency Vulnerability Audit (pip-audit)
+        run: pip-audit --skip-editable
+
+  dependency-review:
+    name: GitHub Dependency Vulnerability Review (PRs)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+
+  gemini-ai-pr-review:
+    name: Gemini AI Pull Request Reviewer
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Gemini AI Diff Review (when GEMINI_API_KEY secret is configured)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::notice::GEMINI_API_KEY secret is not set. Either install the free Gemini Code Assist GitHub App (https://github.com/apps/gemini-code-assist) which uses .gemini/config.yaml automatically, or add GEMINI_API_KEY to Repository Secrets for this Action."
+            exit 0
+          fi
+          python - << 'EOF'
+          import json
+          import os
+          import subprocess
+          import urllib.request
+
+          diff = subprocess.check_output(
+              ["git", "diff", f"{os.environ['BASE_SHA']}...{os.environ['HEAD_SHA']}", "--", "src/", "tests/", "Dockerfile", "docker-compose.yml", "pyproject.toml"],
+              text=True,
+          )[:30000]
+
+          if not diff.strip():
+              print("No code diff to review.")
+              raise SystemExit(0)
+
+          with open(".gemini/styleguide.md", encoding="utf-8") as f:
+              styleguide = f.read()
+
+          prompt = (
+              "You are Gemini Code Reviewer. Review the following Pull Request diff against the repository styleguide. "
+              "Highlight bugs, security risks, edge cases, or style violations concisely with markdown bullet points.\n\n"
+              f"### Styleguide\n{styleguide}\n\n### Diff\n```diff\n{diff}\n```"
+          )
+
+          url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={os.environ['GEMINI_API_KEY']}"
+          payload = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
+          req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+          with urllib.request.urlopen(req, timeout=60) as resp:
+              data = json.loads(resp.read().decode("utf-8"))
+
+          review_text = data["candidates"][0]["content"]["parts"][0]["text"]
+          body = f"## 🤖 Gemini AI Code Review\n\n{review_text}"
+
+          gh_url = f"https://api.github.com/repos/{os.environ['REPO']}/issues/{os.environ['PR_NUMBER']}/comments"
+          gh_req = urllib.request.Request(
+              gh_url,
+              data=json.dumps({"body": body}).encode("utf-8"),
+              headers={
+                  "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+                  "Accept": "application/vnd.github+json",
+                  "Content-Type": "application/json",
+              },
+          )
+          with urllib.request.urlopen(gh_req, timeout=30) as gh_resp:
+              print("Posted Gemini review comment:", gh_resp.status)
+          EOF

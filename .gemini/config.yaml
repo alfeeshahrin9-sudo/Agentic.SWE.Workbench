@@ -1,0 +1,20 @@
+# Gemini Code Assist GitHub App Configuration
+# Install the free app at: https://github.com/apps/gemini-code-assist
+have_fun: false
+
+code_review:
+  disable: false
+  comment_severity_threshold: MEDIUM
+  max_review_comments: 20
+
+pull_request_opened:
+  help: false
+  summary: true
+  code_review: true
+
+ignore_patterns:
+  - ".runs/**"
+  - ".venv/**"
+  - "*.lock"
+  - "eval-report*.json"
+  - "docker-eval-report*.json"
